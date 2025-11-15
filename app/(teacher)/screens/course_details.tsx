@@ -29,6 +29,7 @@ import {
     createClassTest,
     getClassTestMarks,
     getCourseClassTests,
+    publishClassTest,
 } from '@/services/ct.service';
 import { AttendanceSession, AttendanceStatus, ClassTest, Course, Mark, MarkStatus, Student } from '@/types';
 import { Ionicons } from '@expo/vector-icons';
@@ -80,6 +81,9 @@ export default function TeacherCourseDetailScreen() {
     const [newCTName, setNewCTName] = useState('');
     const [newCTDescription, setNewCTDescription] = useState('');
     const [newCTMaxMarks, setNewCTMaxMarks] = useState('20');
+    const [newCTDate, setNewCTDate] = useState(new Date().toISOString().split('T')[0]); // YYYY-MM-DD
+    const [newCTTime, setNewCTTime] = useState('10:00'); // HH:MM 24h
+    const [newCTPublishNow, setNewCTPublishNow] = useState(false);
     const [bestCTCountInput, setBestCTCountInput] = useState<number | undefined>(undefined);
 
     // Edit course state
@@ -258,13 +262,19 @@ export default function TeacherCourseDetailScreen() {
     };
 
     const handleCreateCT = async () => {
-        if (!newCTName.trim() || !newCTMaxMarks || !course || !user?.email) {
-            return;
-        }
+        if (!newCTName.trim() || !newCTMaxMarks || !course || !user?.email) return;
 
         const maxMarks = parseInt(newCTMaxMarks);
-        if (isNaN(maxMarks) || maxMarks <= 0) {
-            return;
+        if (isNaN(maxMarks) || maxMarks <= 0) return;
+
+        // Build scheduled Date from inputs
+        let scheduledDate: Date | undefined = undefined;
+        if (newCTDate && newCTTime) {
+            const dateTimeString = `${newCTDate}T${newCTTime}:00`;
+            const dt = new Date(dateTimeString);
+            if (!isNaN(dt.getTime())) {
+                scheduledDate = dt;
+            }
         }
 
         const newCT = await createClassTest(
@@ -272,16 +282,24 @@ export default function TeacherCourseDetailScreen() {
             newCTName.trim(),
             maxMarks,
             user.email,
-            undefined,
+            scheduledDate,
             newCTDescription.trim() || undefined
         );
 
         if (newCT) {
+            // Optionally publish immediately so it appears in upcoming lists
+            if (newCTPublishNow) {
+                await publishClassTest(newCT.id);
+                newCT.isPublished = true; // reflect locally in memory
+            }
             setClassTests([...classTests, newCT]);
             setMarks({ ...marks, [newCT.id]: [] });
             setNewCTName('');
             setNewCTDescription('');
             setNewCTMaxMarks('20');
+            setNewCTDate(new Date().toISOString().split('T')[0]);
+            setNewCTTime('10:00');
+            setNewCTPublishNow(false);
             setShowCreateCTModal(false);
         }
     };
@@ -739,6 +757,28 @@ export default function TeacherCourseDetailScreen() {
                         />
                     </View>
 
+                    <View style={styles.rowInputs}>
+                        <View style={[styles.inputGroup, {flex:1}]}> 
+                            <Text style={styles.inputLabel}>Date <Text style={{ color: colors.destructive }}>*</Text></Text>
+                            <TextInput
+                                style={styles.textInput}
+                                value={newCTDate}
+                                onChangeText={setNewCTDate}
+                                placeholder="YYYY-MM-DD"
+                                placeholderTextColor={colors.mutedForeground}
+                            />
+                        </View>
+                        <View style={[styles.inputGroup, {flex:1}]}> 
+                            <Text style={styles.inputLabel}>Time <Text style={{ color: colors.destructive }}>*</Text></Text>
+                            <TextInput
+                                style={styles.textInput}
+                                value={newCTTime}
+                                onChangeText={setNewCTTime}
+                                placeholder="HH:MM"
+                                placeholderTextColor={colors.mutedForeground}
+                            />
+                        </View>
+                    </View>
                     <View style={styles.inputGroup}>
                         <Text style={styles.inputLabel}>Description (Optional)</Text>
                         <TextInput
@@ -752,6 +792,14 @@ export default function TeacherCourseDetailScreen() {
                             textAlignVertical="top"
                         />
                     </View>
+                    <TouchableOpacity
+                        style={[styles.publishToggle, newCTPublishNow && {borderColor: colors.primary, backgroundColor: colors.primary + '15'}]}
+                        onPress={() => setNewCTPublishNow(!newCTPublishNow)}
+                        activeOpacity={0.7}
+                    >
+                        <Ionicons name={newCTPublishNow ? 'checkbox-outline' : 'square-outline'} size={20} color={newCTPublishNow ? colors.primary : colors.mutedForeground} />
+                        <Text style={[styles.publishToggleText, {color: newCTPublishNow ? colors.primary : colors.mutedForeground}]}>Publish immediately (show in upcoming)</Text>
+                    </TouchableOpacity>
 
                     <Button onPress={handleCreateCT} style={{ marginTop: 16 }}>
                         Create CT
@@ -1233,6 +1281,24 @@ const getStyles = (colors: ColorScheme) => StyleSheet.create({
     textArea: {
         height: 100,
         textAlignVertical: 'top',
+    },
+    rowInputs: {
+        flexDirection: 'row',
+        gap: 12,
+    },
+    publishToggle: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+        padding: 12,
+        borderWidth: 1,
+        borderColor: colors.border,
+        borderRadius: 10,
+        marginTop: 8,
+    },
+    publishToggleText: {
+        fontSize: 13,
+        fontWeight: '600',
     },
     menuItem: {
         flexDirection: 'row',

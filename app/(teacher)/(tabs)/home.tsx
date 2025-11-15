@@ -1,66 +1,199 @@
 import { Card } from '@/components/ui/card';
 import { Text } from '@/components/ui/text';
+import { useAuth } from '@/hooks/use-auth';
 import { ColorScheme, useTheme } from '@/hooks/use-theme';
+import { getCourseAttendance } from '@/services/attendance.service';
+import { getCourseStats, getTeacherCourses, getTeacherCourseStatus } from '@/services/course.service';
+import { getCourseClassTests } from '@/services/ct.service';
+import { ClassTest, Course } from '@/types';
 import { Feather, Ionicons } from '@expo/vector-icons';
-import React from 'react';
+import { router } from 'expo-router';
+import React, { useEffect, useState } from 'react';
 import {
+  ActivityIndicator,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   TouchableOpacity,
-  View,
   useWindowDimensions,
+  View,
 } from 'react-native';
 
-interface ClassItem {
-  id: number;
-  name: string;
-  code: string;
-  students: number;
-  time: string;
-  room: string;
+interface CourseWithStats {
+  course: Course;
+  studentCount: number;
+  teacherCount: number;
 }
 
 interface AttendanceRecord {
-  date: string;
-  course: string;
+  courseId: string;
+  courseName: string;
+  courseCode: string;
+  sessionId: string;
+  date: Date;
   present: number;
   absent: number;
   percentage: number;
 }
 
-interface TestItem {
-  id: number;
-  course: string;
-  type: string;
-  date: string;
-  time: string;
+interface UpcomingTest {
+  courseId: string;
+  courseName: string;
+  courseCode: string;
+  ct: ClassTest;
 }
 
 const TeacherHomeScreen: React.FC = () => {
-  const { colors } = useTheme()
-  const { width } = useWindowDimensions()
-  const styles = getStyles(colors, width)
+  const { colors } = useTheme();
+  const { width } = useWindowDimensions();
+  const { session: { user } } = useAuth();
+  const styles = getStyles(colors, width);
 
-  const classes: ClassItem[] = [
-    { id: 1, name: 'Computer Networks', code: 'CSE401', students: 45, time: '9:00 AM', room: 'Room 301' },
-    { id: 2, name: 'Database Systems', code: 'CSE302', students: 38, time: '11:00 AM', room: 'Room 205' },
-    { id: 3, name: 'Software Engineering', code: 'CSE403', students: 42, time: '2:00 PM', room: 'Room 401' },
-  ];
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [courses, setCourses] = useState<CourseWithStats[]>([]);
+  const [totalStudents, setTotalStudents] = useState(0);
+  const [avgAttendance, setAvgAttendance] = useState(0);
+  const [recentAttendance, setRecentAttendance] = useState<AttendanceRecord[]>([]);
+  const [upcomingTests, setUpcomingTests] = useState<UpcomingTest[]>([]);
 
-  const recentAttendance: AttendanceRecord[] = [
-    { date: 'Dec 8, 2021', course: 'CSE401', present: 42, absent: 3, percentage: 93 },
-    { date: 'Dec 7, 2021', course: 'CSE302', present: 35, absent: 3, percentage: 92 },
-    { date: 'Dec 6, 2021', course: 'CSE403', present: 38, absent: 4, percentage: 90 },
-  ];
+  useEffect(() => {
+    loadDashboardData();
+  }, []);
 
-  const upcomingTests: TestItem[] = [
-    { id: 1, course: 'Computer Networks', type: 'Midterm', date: 'Dec 15, 2021', time: '10:00 AM' },
-    { id: 2, course: 'Database Systems', type: 'Quiz', date: 'Dec 12, 2021', time: '11:00 AM' },
-  ];
+  const loadDashboardData = async () => {
+    try {
+      setLoading(true);
+      if (!user?.email) return;
+
+      // Get all active teacher courses
+      const allCourses = await getTeacherCourses(user.email, false);
+
+      // Filter for active courses only (default to active if status not explicitly false)
+      const activeCourses: Course[] = [];
+      for (const course of allCourses) {
+        const isActive = await getTeacherCourseStatus(user.email, course.id);
+        if (isActive === false) continue; // explicitly archived
+        activeCourses.push(course); // treat undefined or true as active
+      }
+
+      // Get stats for each course
+      const statsPromises = activeCourses.map(async (course) => {
+        const stats = await getCourseStats(course.id);
+        return {
+          course,
+          studentCount: stats.studentCount,
+          teacherCount: stats.teacherCount,
+        };
+      });
+
+      const coursesWithStats = await Promise.all(statsPromises);
+      setCourses(coursesWithStats);
+
+      // Calculate total students
+      const total = coursesWithStats.reduce((sum, c) => sum + c.studentCount, 0);
+      setTotalStudents(total);
+
+      // Get recent attendance records
+      const attendancePromises = activeCourses.slice(0, 3).map(async (course) => {
+        try {
+          const sessions = await getCourseAttendance(course.id);
+          // Sort by date and get the 3 most recent
+          const sorted = sessions.sort((a, b) => b.date.toMillis() - a.date.toMillis());
+          return sorted.slice(0, 3).map((session) => {
+            const total = session.present.length + session.absent.length;
+            const percentage = total > 0 ? Math.round((session.present.length / total) * 100) : 0;
+            return {
+              courseId: course.id,
+              courseName: course.name,
+              courseCode: course.code,
+              sessionId: session.id,
+              date: session.date.toDate(),
+              present: session.present.length,
+              absent: session.absent.length,
+              percentage,
+            };
+          });
+        } catch (error) {
+          console.error('Error loading attendance:', error);
+          return [];
+        }
+      });
+
+      const allAttendance = (await Promise.all(attendancePromises)).flat();
+      // Sort all attendance records by date and take top 3
+      const sortedAttendance = allAttendance.sort((a, b) => b.date.getTime() - a.date.getTime());
+      setRecentAttendance(sortedAttendance.slice(0, 3));
+
+      // Calculate average attendance
+      if (sortedAttendance.length > 0) {
+        const avg = sortedAttendance.reduce((sum, a) => sum + a.percentage, 0) / sortedAttendance.length;
+        setAvgAttendance(Math.round(avg));
+      }
+
+      // Get upcoming class tests
+      const testsPromises = activeCourses.map(async (course) => {
+        try {
+          const cts = await getCourseClassTests(course.id);
+          // Filter published CTs that are in the future
+          const now = new Date();
+          const upcomingCourseCTs = cts
+            .filter((ct) => ct.isPublished && ct.date.toDate() > now)
+            .slice(0, 2)
+            .map((ct) => ({
+              courseId: course.id,
+              courseName: course.name,
+              courseCode: course.code,
+              ct,
+            }));
+          return upcomingCourseCTs;
+        } catch (error) {
+          console.error('Error loading class tests:', error);
+          return [];
+        }
+      });
+
+      const allTests = (await Promise.all(testsPromises)).flat();
+      // Sort by date and take top 3
+      const sortedTests = allTests.sort((a, b) => a.ct.date.toMillis() - b.ct.date.toMillis());
+      setUpcomingTests(sortedTests.slice(0, 3));
+
+    } catch (error) {
+      console.error('Error loading dashboard:', error);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  };
+
+  const onRefresh = () => {
+    setRefreshing(true);
+    loadDashboardData();
+  };
+
+  const handleCoursePress = (courseId: string) => {
+    router.push(`/(teacher)/screens/course_details?courseId=${courseId}`);
+  };
+
+  if (loading && !refreshing) {
+    return (
+      <View style={styles.container}>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={colors.primary} />
+          <Text style={styles.loadingText}>Loading dashboard...</Text>
+        </View>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
-      <ScrollView showsVerticalScrollIndicator={false}>
+      <ScrollView 
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+        }
+      >
         {/* Header Section with Primary Color */}
         <View style={styles.headerWrapper}>
           <View style={styles.headerInner}>
@@ -68,10 +201,10 @@ const TeacherHomeScreen: React.FC = () => {
               <View style={styles.headerTop}>
                 <View style={styles.profileSection}>
                   <View style={styles.avatar}>
-                    <Text style={styles.avatarText}>SC</Text>
+                    <Text style={styles.avatarText}>{(user?.name || user?.email || 'T').charAt(0).toUpperCase()}</Text>
                   </View>
                   <View style={styles.greeting}>
-                    <Text style={styles.greetingText}>Hello Dr. Sarah</Text>
+                    <Text style={styles.greetingText}>Hello {user?.name || user?.email || 'Teacher'}</Text>
                     <Text style={styles.title}>Manage Your Classes</Text>
                   </View>
                 </View>
@@ -86,115 +219,171 @@ const TeacherHomeScreen: React.FC = () => {
             </View>
           </View>
 
-          {/* Overlapping Stats Card */}
-          <Card style={styles.statsCard}>
-            {
-              [
-                { value: 3, label: 'Classes' },
-                { value: 125, label: 'Students' },
-                { value: '91%', label: 'Attendance' },
-              ].map((item, i) => (
-                <View style={[styles.statItem, i>0 && i<2 && styles.statItemBorder]} key={i}>
-                  <Text style={styles.statNumber}>{item.value}</Text>
-                  <Text style={styles.statLabel}>{item.label}</Text>
-                </View>
-              ))
-            }
-          </Card>
+          {/* Stats Row (unified with student design) */}
+          <View style={styles.statsContainer}>
+            <Card style={styles.statCard}>
+              <View style={styles.statIconContainer}>
+                <Ionicons name="book" size={24} color={colors.primary} />
+              </View>
+              <Text style={styles.statValue}>{courses.length}</Text>
+              <Text style={styles.statLabel}>Active Courses</Text>
+            </Card>
+            <Card style={styles.statCard}>
+              <View style={styles.statIconContainer}>
+                <Ionicons name="people" size={24} color="#6366F1" />
+              </View>
+              <Text style={styles.statValue}>{totalStudents}</Text>
+              <Text style={styles.statLabel}>Students</Text>
+            </Card>
+            <Card style={styles.statCard}>
+              <View style={styles.statIconContainer}>
+                <Ionicons name="clipboard" size={24} color="#F59E0B" />
+              </View>
+              <Text style={styles.statValue}>{upcomingTests.length}</Text>
+              <Text style={styles.statLabel}>Upcoming CTs</Text>
+            </Card>
+          </View>
         </View>
 
         {/* Content Section */}
         <View style={styles.contentContainer}>
-          {/* Today's Classes */}
+          {/* Quick Insights */}
           <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Today's Classes</Text>
-            <TouchableOpacity style={styles.addButton}>
-              <Ionicons
-                name='add'
-                size={22}
-                color='#FFFFFF'
-              />
-              <Text style={styles.addButtonText}>Add Class</Text>
+            <Text style={styles.sectionTitle}>Quick Insights</Text>
+          </View>
+          <View style={{flexDirection:'row', gap:12}}>
+            <Card style={[styles.classCard, {flex:1, paddingVertical:16}] }>
+              <View style={{flexDirection:'row', alignItems:'center', gap:10}}>
+                <Ionicons name="clipboard-outline" size={20} color={colors.primary} />
+                <Text style={{color: colors.mutedForeground, fontWeight:'600'}}>Upcoming Tests</Text>
+              </View>
+              <Text style={{fontSize:22, fontWeight:'700', color: colors.foreground, marginTop:6}}>{upcomingTests.length}</Text>
+            </Card>
+            <Card style={[styles.classCard, {flex:1, paddingVertical:16}] }>
+              <View style={{flexDirection:'row', alignItems:'center', gap:10}}>
+                <Ionicons name="calendar-outline" size={20} color={colors.primary} />
+                <Text style={{color: colors.mutedForeground, fontWeight:'600'}}>Last Attendance</Text>
+              </View>
+              <Text style={{fontSize:14, fontWeight:'600', color: colors.foreground, marginTop:6}}>
+                {recentAttendance.length > 0 ? recentAttendance[0].date.toLocaleDateString() : 'No sessions yet'}
+              </Text>
+            </Card>
+          </View>
+
+          {/* My Courses */}
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>My Courses</Text>
+            <TouchableOpacity onPress={() => router.push('/(teacher)/(tabs)/courses')}>
+              <Text style={styles.viewAllText}>View All</Text>
             </TouchableOpacity>
           </View>
 
-          {classes.map((cls) => (
-            <Card key={cls.id} style={styles.classCard}>
-              <View style={styles.classCardHeader}>
-                <View style={styles.classInfo}>
-                  <View style={styles.classIconContainer}>
-                    <Ionicons
-                      name='book-outline'
-                      size={22}
-                      color='#FFFFFF'
-                    />
-                  </View>
-                  <View style={styles.classTextContainer}>
-                    <Text style={styles.className} numberOfLines={1}>{cls.name}</Text>
-                    <Text style={styles.classCode}>{cls.code}</Text>
-                  </View>
-                </View>
-                <View style={styles.studentBadge}>
-                  <Text style={styles.studentBadgeText}>{cls.students}</Text>
-                </View>
-              </View>
-              <View style={styles.classCardFooter}>
-                <View style={styles.classTimeSection}>
-                  <Feather
-                    name='clock'
-                    size={18}
-                    color='#6B7280'
-                  />
-                  <Text style={styles.classTimeText}>{cls.time}</Text>
-                </View>
-                <Text style={styles.classRoom}>{cls.room}</Text>
-                <TouchableOpacity style={styles.attendanceButton}>
-                  <Text style={styles.attendanceButtonText}>Attendance</Text>
-                </TouchableOpacity>
-              </View>
+          {courses.length === 0 ? (
+            <Card style={styles.emptyCard}>
+              <Ionicons name="book-outline" size={48} color={colors.mutedForeground} />
+              <Text style={styles.emptyText}>No active courses</Text>
+              <TouchableOpacity onPress={() => router.push('/(teacher)/(tabs)/courses')}>
+                <Text style={[styles.viewAllText, {marginTop:8}]}>Go to My Courses</Text>
+              </TouchableOpacity>
             </Card>
-          ))}
+          ) : (
+            courses.slice(0, 3).map((item) => (
+              <TouchableOpacity key={item.course.id} onPress={() => handleCoursePress(item.course.id)}>
+                <Card style={styles.classCard}>
+                  <View style={styles.classCardHeader}>
+                    <View style={styles.classInfo}>
+                      <View style={styles.classIconContainer}>
+                        <Ionicons
+                          name='book-outline'
+                          size={22}
+                          color='#FFFFFF'
+                        />
+                      </View>
+                      <View style={styles.classTextContainer}>
+                        <Text style={styles.className} numberOfLines={1}>{item.course.name}</Text>
+                        <Text style={styles.classCode}>{item.course.code}</Text>
+                      </View>
+                    </View>
+                    <View style={styles.studentBadge}>
+                      <Text style={styles.studentBadgeText}>{item.studentCount}</Text>
+                    </View>
+                  </View>
+                  <View style={styles.classCardFooter}>
+                    <View style={styles.classTimeSection}>
+                      <Ionicons
+                        name='people-outline'
+                        size={18}
+                        color='#6B7280'
+                      />
+                      <Text style={styles.classTimeText}>{item.studentCount} students</Text>
+                    </View>
+                    <TouchableOpacity style={styles.attendanceButton}>
+                      <Text style={styles.attendanceButtonText}>View Details</Text>
+                    </TouchableOpacity>
+                  </View>
+                </Card>
+              </TouchableOpacity>
+            ))
+          )}
 
           {/* Recent Attendance */}
-          <Text style={styles.sectionTitle}>Recent Attendance</Text>
-          {recentAttendance.map((record, idx) => (
-            <Card key={idx} style={styles.attendanceCard}>
-              <View style={styles.attendanceHeader}>
-                <View style={styles.attendanceLeft}>
-                  <Text style={styles.attendanceCourse}>{record.course}</Text>
-                  <Text style={styles.attendanceDate}>{record.date}</Text>
-                </View>
-                <View style={styles.attendancePercentage}>
-                  <Text style={styles.percentageNumber}>{record.percentage}%</Text>
-                  <Text style={styles.percentageLabel}>Attendance</Text>
-                </View>
-              </View>
-              <View style={styles.attendanceStats}>
-                <Text style={styles.presentText}>✓ {record.present} Present</Text>
-                <Text style={styles.absentText}>✗ {record.absent} Absent</Text>
-              </View>
-            </Card>
-          ))}
+          {recentAttendance.length > 0 && (
+            <>
+              <Text style={styles.sectionTitle}>Recent Attendance</Text>
+              {recentAttendance.map((record, idx) => (
+                <TouchableOpacity key={idx} onPress={() => handleCoursePress(record.courseId)}>
+                  <Card style={styles.attendanceCard}>
+                    <View style={styles.attendanceHeader}>
+                      <View style={styles.attendanceLeft}>
+                        <Text style={styles.attendanceCourse}>{record.courseName}</Text>
+                        <Text style={styles.attendanceDate}>
+                          {record.date.toLocaleDateString()}
+                        </Text>
+                      </View>
+                      <View style={styles.attendancePercentage}>
+                        <Text style={styles.percentageNumber}>{record.percentage}%</Text>
+                        <Text style={styles.percentageLabel}>Attendance</Text>
+                      </View>
+                    </View>
+                    <View style={styles.attendanceStats}>
+                      <Text style={styles.presentText}>✓ {record.present} Present</Text>
+                      <Text style={styles.absentText}>✗ {record.absent} Absent</Text>
+                    </View>
+                  </Card>
+                </TouchableOpacity>
+              ))}
+            </>
+          )}
 
           {/* Upcoming Tests */}
-          <Text style={styles.sectionTitle}>Upcoming Tests</Text>
-          {upcomingTests.map((test) => (
-            <Card key={test.id} style={styles.testCard}>
-              <View style={styles.testInfo}>
-                <View style={styles.testIconContainer}>
-                  <Feather name="clipboard" size={20} color="#FFFFFF" />
-                </View>
-                <View style={styles.testTextContainer}>
-                  <Text style={styles.testCourse} numberOfLines={1}>{test.course}</Text>
-                  <Text style={styles.testType}>{test.type}</Text>
-                </View>
-              </View>
-              <View style={styles.testDateTime}>
-                <Text style={styles.testDate}>{test.date}</Text>
-                <Text style={styles.testTime}>{test.time}</Text>
-              </View>
-            </Card>
-          ))}
+          {upcomingTests.length > 0 && (
+            <>
+              <Text style={styles.sectionTitle}>Upcoming Tests</Text>
+              {upcomingTests.map((test, idx) => (
+                <TouchableOpacity key={idx} onPress={() => handleCoursePress(test.courseId)}>
+                  <Card style={styles.testCard}>
+                    <View style={styles.testInfo}>
+                      <View style={styles.testIconContainer}>
+                        <Feather name="clipboard" size={20} color="#FFFFFF" />
+                      </View>
+                      <View style={styles.testTextContainer}>
+                        <Text style={styles.testCourse} numberOfLines={1}>{test.courseName}</Text>
+                        <Text style={styles.testType}>{test.ct.name}</Text>
+                      </View>
+                    </View>
+                    <View style={styles.testDateTime}>
+                      <Text style={styles.testDate}>
+                        {test.ct.date.toDate().toLocaleDateString()}
+                      </Text>
+                      <Text style={styles.testTime}>
+                        {test.ct.totalMarks} marks
+                      </Text>
+                    </View>
+                  </Card>
+                </TouchableOpacity>
+              ))}
+            </>
+          )}
         </View>
       </ScrollView>
     </View>
@@ -208,6 +397,32 @@ const getStyles = (colors: ColorScheme, width: number) => {
     container: {
       flex: 1,
       backgroundColor: colors.background,
+    },
+    loadingContainer: {
+      flex: 1,
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    loadingText: {
+      marginTop: 12,
+      fontSize: 14,
+      color: colors.mutedForeground,
+    },
+    viewAllText: {
+      fontSize: 14,
+      color: colors.primary,
+      fontWeight: '600',
+    },
+    emptyCard: {
+      padding: 32,
+      alignItems: 'center',
+      borderRadius: 12,
+      marginBottom: 16,
+    },
+    emptyText: {
+      marginTop: 12,
+      fontSize: 14,
+      color: colors.mutedForeground,
     },
     headerWrapper: {
       backgroundColor: colors.primary,
@@ -265,35 +480,33 @@ const getStyles = (colors: ColorScheme, width: number) => {
     notificationButton: {
       padding: 8,
     },
-    statsCard: {
-      borderRadius: 20,
-      borderWidth: 0,
-      padding: 20,
-      backgroundColor: '#fff',
-      marginHorizontal: 24,
-      marginBottom: 40,
-      display: 'flex',
+    statsContainer: {
       flexDirection: 'row',
-      justifyContent: 'space-around',
+      paddingHorizontal: 16,
+      gap: 12,
+      marginBottom: 24,
+      marginTop: 12,
     },
-    statItem: {
-      alignItems: 'center',
+    statCard: {
       flex: 1,
+      padding: 16,
+      alignItems: 'center',
+      borderRadius: 16,
+      borderWidth: 1,
+      borderColor: colors.border,
     },
-    statItemBorder: {
-      borderLeftWidth: 1,
-      borderRightWidth: 1,
-      borderColor: colors.muted,
+    statIconContainer: {
+      marginBottom: 8,
     },
-    statNumber: {
-      fontSize: 28,
+    statValue: {
+      fontSize: 26,
       fontWeight: '700',
-      color: colors.primary,
+      color: colors.foreground,
+      marginBottom: 4,
     },
     statLabel: {
       fontSize: 12,
-      color: '#000',
-      marginTop: 6,
+      color: colors.mutedForeground,
       fontWeight: '500',
     },
     contentContainer: {
