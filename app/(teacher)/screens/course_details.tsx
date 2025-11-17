@@ -30,6 +30,7 @@ import {
     getClassTestMarks,
     getCourseClassTests,
     publishClassTest,
+    updateClassTest,
 } from '@/services/ct.service';
 import { AttendanceSession, AttendanceStatus, ClassTest, Course, Mark, MarkStatus, Student } from '@/types';
 import { Ionicons } from '@expo/vector-icons';
@@ -234,6 +235,22 @@ export default function TeacherCourseDetailScreen() {
 
         setCTMarksInput(marksInput);
         setShowCTModal(true);
+    };
+
+    const handlePublishToggle = async (ct: ClassTest) => {
+        const newPublishedStatus = !ct.isPublished;
+        const action = newPublishedStatus ? 'publish' : 'unpublish';
+
+        const success = await updateClassTest(ct.id, { isPublished: newPublishedStatus });
+
+        if (success) {
+            // Update local state
+            setClassTests(classTests.map(c =>
+                c.id === ct.id ? { ...c, isPublished: newPublishedStatus } : c
+            ));
+        } else {
+            console.error(`Failed to ${action} class test`);
+        }
     };
 
     const saveCTMarks = async () => {
@@ -505,6 +522,7 @@ export default function TeacherCourseDetailScreen() {
                     colors={colors}
                     onCreateCT={() => setShowCreateCTModal(true)}
                     onAddMarks={(ct) => handleAddCTMarks(ct)}
+                    onPublishToggle={(ct) => handlePublishToggle(ct)}
                     calculateCTAverage={calculateCTAverage}
                 />
             )}
@@ -758,7 +776,7 @@ export default function TeacherCourseDetailScreen() {
                     </View>
 
                     <View style={styles.rowInputs}>
-                        <View style={[styles.inputGroup, {flex:1}]}> 
+                        <View style={[styles.inputGroup, { flex: 1 }]}>
                             <Text style={styles.inputLabel}>Date <Text style={{ color: colors.destructive }}>*</Text></Text>
                             <TextInput
                                 style={styles.textInput}
@@ -768,7 +786,7 @@ export default function TeacherCourseDetailScreen() {
                                 placeholderTextColor={colors.mutedForeground}
                             />
                         </View>
-                        <View style={[styles.inputGroup, {flex:1}]}> 
+                        <View style={[styles.inputGroup, { flex: 1 }]}>
                             <Text style={styles.inputLabel}>Time <Text style={{ color: colors.destructive }}>*</Text></Text>
                             <TextInput
                                 style={styles.textInput}
@@ -793,12 +811,12 @@ export default function TeacherCourseDetailScreen() {
                         />
                     </View>
                     <TouchableOpacity
-                        style={[styles.publishToggle, newCTPublishNow && {borderColor: colors.primary, backgroundColor: colors.primary + '15'}]}
+                        style={[styles.publishToggle, newCTPublishNow && { borderColor: colors.primary, backgroundColor: colors.primary + '15' }]}
                         onPress={() => setNewCTPublishNow(!newCTPublishNow)}
                         activeOpacity={0.7}
                     >
                         <Ionicons name={newCTPublishNow ? 'checkbox-outline' : 'square-outline'} size={20} color={newCTPublishNow ? colors.primary : colors.mutedForeground} />
-                        <Text style={[styles.publishToggleText, {color: newCTPublishNow ? colors.primary : colors.mutedForeground}]}>Publish immediately (show in upcoming)</Text>
+                        <Text style={[styles.publishToggleText, { color: newCTPublishNow ? colors.primary : colors.mutedForeground }]}>Publish immediately (show in upcoming)</Text>
                     </TouchableOpacity>
 
                     <Button onPress={handleCreateCT} style={{ marginTop: 16 }}>

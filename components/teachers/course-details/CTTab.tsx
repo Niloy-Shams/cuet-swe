@@ -13,6 +13,7 @@ interface CTTabProps {
     colors: ColorScheme;
     onCreateCT: () => void;
     onAddMarks: (ct: ClassTest) => void;
+    onPublishToggle: (ct: ClassTest) => void;
     calculateCTAverage: (ctId: string) => number;
 }
 
@@ -22,6 +23,7 @@ export const CTTab: React.FC<CTTabProps> = ({
     colors,
     onCreateCT,
     onAddMarks,
+    onPublishToggle,
     calculateCTAverage,
 }) => {
     const styles = getStyles(colors);
@@ -54,14 +56,22 @@ export const CTTab: React.FC<CTTabProps> = ({
                                 <Card key={ct.id} style={styles.ctCard}>
                                     <View style={styles.ctHeader}>
                                         <Text style={styles.ctTitle}>{ct.name}</Text>
-                                        {completed && (
-                                            <View style={[styles.ctBadge, { backgroundColor: colors.chart3 + '20' }]}>
-                                                <Ionicons name="checkmark" size={12} color={colors.chart3} />
-                                                <Text style={[styles.ctBadgeText, { color: colors.chart3 }]}>
-                                                    Done
+                                        <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
+                                            {completed && (
+                                                <View style={[styles.ctBadge, { backgroundColor: colors.chart3 + '20' }]}>
+                                                    <Ionicons name="checkmark" size={12} color={colors.chart3} />
+                                                    <Text style={[styles.ctBadgeText, { color: colors.chart3 }]}>
+                                                        Done
+                                                    </Text>
+                                                </View>
+                                            )}
+                                            <View style={[styles.ctBadge, { backgroundColor: ct.isPublished ? colors.chart2 + '20' : colors.mutedForeground + '20' }]}>
+                                                <Ionicons name={ct.isPublished ? 'eye' : 'eye-off'} size={12} color={ct.isPublished ? colors.chart2 : colors.mutedForeground} />
+                                                <Text style={[styles.ctBadgeText, { color: ct.isPublished ? colors.chart2 : colors.mutedForeground }]}>
+                                                    {ct.isPublished ? 'Visible' : 'Hidden'}
                                                 </Text>
                                             </View>
-                                        )}
+                                        </View>
                                     </View>
 
                                     {ct.description && (
@@ -83,15 +93,24 @@ export const CTTab: React.FC<CTTabProps> = ({
                                         )}
                                     </View>
 
-                                    <Button
-                                        onPress={() => onAddMarks(ct)}
-                                        style={{ marginTop: 12 }}
-                                    >
-                                        <Ionicons name="create" size={18} color={colors.primaryForeground} />
-                                        <Text style={{ color: colors.primaryForeground, marginLeft: 6 }}>
-                                            {completed ? 'Edit Marks' : 'Add Marks'}
-                                        </Text>
-                                    </Button>
+                                    <View style={{ flexDirection: 'row', gap: 8, marginTop: 12 }}>
+                                        <Button
+                                            onPress={() => onAddMarks(ct)}
+                                            style={{ flex: 1 }}
+                                        >
+                                            <Ionicons name="create" size={18} color={colors.primaryForeground} />
+                                            <Text style={{ color: colors.primaryForeground, marginLeft: 6 }}>
+                                                {completed ? 'Edit Marks' : 'Add Marks'}
+                                            </Text>
+                                        </Button>
+                                        <Button
+                                            onPress={() => onPublishToggle(ct)}
+                                            variant={ct.isPublished ? 'outline' : 'default'}
+                                            style={{ paddingHorizontal: 16 }}
+                                        >
+                                            <Ionicons name={ct.isPublished ? 'eye-off' : 'eye'} size={18} color={ct.isPublished ? colors.foreground : colors.primaryForeground} />
+                                        </Button>
+                                    </View>
                                 </Card>
                             );
                         })}

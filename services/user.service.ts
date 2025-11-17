@@ -1,7 +1,6 @@
 import { db } from '@/config/firebase.config';
 import { AppUser } from '@/types';
-import { getRole } from '@/utils/role';
-import { extractStudentIdFromEmail } from '@/utils/studentId';
+import { getRole, extractStudentIdFromEmail } from '@/utils/role';
 import { User } from 'firebase/auth';
 import { Timestamp, doc, getDoc, setDoc } from 'firebase/firestore';
 

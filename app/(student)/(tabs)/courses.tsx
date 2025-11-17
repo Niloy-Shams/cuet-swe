@@ -9,7 +9,7 @@ import {
     toggleStudentCourseStatus,
 } from '@/services/course.service';
 import { Course } from '@/types';
-import { extractStudentIdFromEmail } from '@/utils/studentId';
+import { extractStudentIdFromEmail } from '@/utils/role';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import React, { useEffect, useState } from 'react';

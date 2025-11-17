@@ -72,7 +72,7 @@ const TeacherHomeScreen: React.FC = () => {
       // Filter for active courses only (default to active if status not explicitly false)
       const activeCourses: Course[] = [];
       for (const course of allCourses) {
-        const isActive = await getTeacherCourseStatus(user.email, course.id);
+        const isActive = await getTeacherCourseStatus(course.id, user.email);
         if (isActive === false) continue; // explicitly archived
         activeCourses.push(course); // treat undefined or true as active
       }
@@ -82,16 +82,22 @@ const TeacherHomeScreen: React.FC = () => {
         const stats = await getCourseStats(course.id);
         return {
           course,
-          studentCount: stats.studentCount,
-          teacherCount: stats.teacherCount,
-        };
+          studentCount: stats?.studentCount ?? 0,
+          teacherCount: stats?.teacherCount ?? 0,
+        } as CourseWithStats;
       });
 
-      const coursesWithStats = await Promise.all(statsPromises);
+      let coursesWithStats = await Promise.all(statsPromises);
+      // Sort recent courses first by createdAt if available
+      coursesWithStats = coursesWithStats.sort((a, b) => {
+        const aTime = (a.course as any)?.createdAt?.toMillis?.() ?? 0;
+        const bTime = (b.course as any)?.createdAt?.toMillis?.() ?? 0;
+        return bTime - aTime;
+      });
       setCourses(coursesWithStats);
 
       // Calculate total students
-      const total = coursesWithStats.reduce((sum, c) => sum + c.studentCount, 0);
+      const total = coursesWithStats.reduce((sum, c) => sum + (c?.studentCount ?? 0), 0);
       setTotalStudents(total);
 
       // Get recent attendance records
@@ -101,16 +107,19 @@ const TeacherHomeScreen: React.FC = () => {
           // Sort by date and get the 3 most recent
           const sorted = sessions.sort((a, b) => b.date.toMillis() - a.date.toMillis());
           return sorted.slice(0, 3).map((session) => {
-            const total = session.present.length + session.absent.length;
-            const percentage = total > 0 ? Math.round((session.present.length / total) * 100) : 0;
+            const statuses = Object.values(session.studentStatuses || {});
+            const presentCount = statuses.filter((s) => s === 'present').length;
+            const absentCount = statuses.filter((s) => s === 'absent').length;
+            const total = presentCount + absentCount;
+            const percentage = total > 0 ? Math.round((presentCount / total) * 100) : 0;
             return {
               courseId: course.id,
               courseName: course.name,
               courseCode: course.code,
               sessionId: session.id,
               date: session.date.toDate(),
-              present: session.present.length,
-              absent: session.absent.length,
+              present: presentCount,
+              absent: absentCount,
               percentage,
             };
           });
@@ -188,7 +197,7 @@ const TeacherHomeScreen: React.FC = () => {
 
   return (
     <View style={styles.container}>
-      <ScrollView 
+      <ScrollView
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
@@ -251,20 +260,20 @@ const TeacherHomeScreen: React.FC = () => {
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>Quick Insights</Text>
           </View>
-          <View style={{flexDirection:'row', gap:12}}>
-            <Card style={[styles.classCard, {flex:1, paddingVertical:16}] }>
-              <View style={{flexDirection:'row', alignItems:'center', gap:10}}>
+          <View style={{ flexDirection: 'row', gap: 12 }}>
+            <Card style={[styles.classCard, { flex: 1, paddingVertical: 16 }]}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
                 <Ionicons name="clipboard-outline" size={20} color={colors.primary} />
-                <Text style={{color: colors.mutedForeground, fontWeight:'600'}}>Upcoming Tests</Text>
+                <Text style={{ color: colors.mutedForeground, fontWeight: '600' }}>Upcoming Tests</Text>
               </View>
-              <Text style={{fontSize:22, fontWeight:'700', color: colors.foreground, marginTop:6}}>{upcomingTests.length}</Text>
+              <Text style={{ fontSize: 22, fontWeight: '700', color: colors.foreground, marginTop: 6 }}>{upcomingTests.length}</Text>
             </Card>
-            <Card style={[styles.classCard, {flex:1, paddingVertical:16}] }>
-              <View style={{flexDirection:'row', alignItems:'center', gap:10}}>
+            <Card style={[styles.classCard, { flex: 1, paddingVertical: 16 }]}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
                 <Ionicons name="calendar-outline" size={20} color={colors.primary} />
-                <Text style={{color: colors.mutedForeground, fontWeight:'600'}}>Last Attendance</Text>
+                <Text style={{ color: colors.mutedForeground, fontWeight: '600' }}>Last Attendance</Text>
               </View>
-              <Text style={{fontSize:14, fontWeight:'600', color: colors.foreground, marginTop:6}}>
+              <Text style={{ fontSize: 14, fontWeight: '600', color: colors.foreground, marginTop: 6 }}>
                 {recentAttendance.length > 0 ? recentAttendance[0].date.toLocaleDateString() : 'No sessions yet'}
               </Text>
             </Card>
@@ -283,7 +292,7 @@ const TeacherHomeScreen: React.FC = () => {
               <Ionicons name="book-outline" size={48} color={colors.mutedForeground} />
               <Text style={styles.emptyText}>No active courses</Text>
               <TouchableOpacity onPress={() => router.push('/(teacher)/(tabs)/courses')}>
-                <Text style={[styles.viewAllText, {marginTop:8}]}>Go to My Courses</Text>
+                <Text style={[styles.viewAllText, { marginTop: 8 }]}>Go to My Courses</Text>
               </TouchableOpacity>
             </Card>
           ) : (

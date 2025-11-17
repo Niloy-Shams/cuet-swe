@@ -13,7 +13,7 @@ import {
 } from '@/services/course.service';
 import { getCourseClassTests, getStudentCourseMarks } from '@/services/ct.service';
 import { ClassTest, Course } from '@/types';
-import { extractStudentIdFromEmail } from '@/utils/studentId';
+import { extractStudentIdFromEmail } from '@/utils/role';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import React, { useEffect, useState } from 'react';
@@ -86,7 +86,7 @@ export default function StudentHomeTab() {
 
           // Get CTs and marks
           const classTests = await getCourseClassTests(course.id);
-          const publishedCTs = classTests.filter((ct) => ct.published);
+          const publishedCTs = classTests.filter((ct) => ct.isPublished);
           const marks = await getStudentCourseMarks(course.id, user.email!);
 
           // Calculate average CT marks
@@ -286,72 +286,72 @@ export default function StudentHomeTab() {
           </View>
           {coursesWithStats.length === 0 ? (
             <Card style={styles.courseCard}>
-              <View style={{flexDirection:'row', alignItems:'center'}}>
+              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                 <Ionicons name="information-circle" size={20} color={colors.mutedForeground} />
-                <Text style={[styles.courseStatText, {marginLeft:8}]}>No active courses yet. Enroll to see insights.</Text>
+                <Text style={[styles.courseStatText, { marginLeft: 8 }]}>No active courses yet. Enroll to see insights.</Text>
               </View>
             </Card>
           ) : (
-          coursesWithStats.slice(0, 3).map((item) => (
-            <TouchableOpacity
-              key={item.course.id}
-              onPress={() => handleCoursePress(item.course.id)}
-            >
-              <Card style={styles.courseCard}>
-                <View style={styles.courseHeader}>
-                  <View style={styles.courseIconContainer}>
-                    <Ionicons
-                      name="book"
-                      size={24}
-                      color={colors.primary}
-                    />
+            coursesWithStats.slice(0, 3).map((item) => (
+              <TouchableOpacity
+                key={item.course.id}
+                onPress={() => handleCoursePress(item.course.id)}
+              >
+                <Card style={styles.courseCard}>
+                  <View style={styles.courseHeader}>
+                    <View style={styles.courseIconContainer}>
+                      <Ionicons
+                        name="book"
+                        size={24}
+                        color={colors.primary}
+                      />
+                    </View>
+                    <View style={styles.courseInfo}>
+                      <Text style={styles.courseName}>
+                        {item.course.name}
+                      </Text>
+                      <Text style={styles.courseCode}>
+                        {item.course.code}
+                      </Text>
+                    </View>
                   </View>
-                  <View style={styles.courseInfo}>
-                    <Text style={styles.courseName}>
-                      {item.course.name}
-                    </Text>
-                    <Text style={styles.courseCode}>
-                      {item.course.code}
-                    </Text>
-                  </View>
-                </View>
-                <View style={styles.courseStats}>
-                  <View style={styles.courseStat}>
-                    <Ionicons
-                      name="calendar"
-                      size={16}
-                      color={colors.mutedForeground}
-                    />
-                    <Text style={styles.courseStatText}>
-                      {item.totalClasses} classes
-                    </Text>
-                  </View>
-                  <View style={styles.courseStat}>
-                    <Ionicons
-                      name="checkmark-circle"
-                      size={16}
-                      color="#10B981"
-                    />
-                    <Text style={styles.courseStatText}>
-                      {item.attendancePercentage}% attendance
-                    </Text>
-                  </View>
-                  {item.totalCTs > 0 && (
+                  <View style={styles.courseStats}>
                     <View style={styles.courseStat}>
                       <Ionicons
-                        name="document-text"
+                        name="calendar"
                         size={16}
                         color={colors.mutedForeground}
                       />
                       <Text style={styles.courseStatText}>
-                        {item.ctAverage.toFixed(1)}% avg CT
+                        {item.totalClasses} classes
                       </Text>
                     </View>
-                  )}
-                </View>
-              </Card>
-            </TouchableOpacity>
-          ))
+                    <View style={styles.courseStat}>
+                      <Ionicons
+                        name="checkmark-circle"
+                        size={16}
+                        color="#10B981"
+                      />
+                      <Text style={styles.courseStatText}>
+                        {item.attendancePercentage}% attendance
+                      </Text>
+                    </View>
+                    {item.totalCTs > 0 && (
+                      <View style={styles.courseStat}>
+                        <Ionicons
+                          name="document-text"
+                          size={16}
+                          color={colors.mutedForeground}
+                        />
+                        <Text style={styles.courseStatText}>
+                          {item.ctAverage.toFixed(1)}% avg CT
+                        </Text>
+                      </View>
+                    )}
+                  </View>
+                </Card>
+              </TouchableOpacity>
+            ))
           )}
         </View>
       </ScrollView>
