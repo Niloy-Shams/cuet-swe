@@ -1,7 +1,7 @@
 import { auth } from '@/config/firebase.config';
 import LoadingScreen from '@/screens/loading.screen';
 import { saveUserToFirestore } from '@/services/user.service';
-import { AppUser } from '@/types/user.type';
+import { AppUser } from '@/types';
 import { getRole } from '@/utils/role';
 import { router } from 'expo-router';
 import { onAuthStateChanged } from 'firebase/auth';

@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "69060700428",
+    "project_id": "cuet-swe",
+    "storage_bucket": "cuet-swe.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:69060700428:android:bec07763d3cfda445e0129",
+        "android_client_info": {
+          "package_name": "com.cuet.swe"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBi5GbVh8EPQ_MM2SORlKQUC9-lR31DfiM"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

@@ -162,10 +162,71 @@ export const publishClassTest = async (
     ctId: string
 ): Promise<boolean> => {
     try {
-        return await updateClassTest(ctId, { isPublished: true });
+        const success = await updateClassTest(ctId, { isPublished: true });
+        
+        if (success) {
+            // Send notifications to students about published results
+            await notifyStudentsAboutPublishedCT(ctId);
+        }
+        
+        return success;
     } catch (error) {
         console.error('❌ Error publishing class test:', error);
         return false;
+    }
+};
+
+/**
+ * Notify students when CT results are published
+ * @param ctId - The class test ID
+ */
+const notifyStudentsAboutPublishedCT = async (
+    ctId: string
+): Promise<void> => {
+    try {
+        // Import dynamically to avoid circular dependencies
+        const { getCourseById } = await import('./course.service');
+        const { notifyStudentsCTPublished } = await import('./notification.service');
+        
+        // Get CT details
+        const ct = await getClassTestById(ctId);
+        if (!ct) {
+            console.error('❌ CT not found for notifications');
+            return;
+        }
+        
+        // Get course details
+        const course = await getCourseById(ct.courseId);
+        if (!course) {
+            console.error('❌ Course not found for notifications');
+            return;
+        }
+        
+        // Get all marks for this CT
+        const marks = await getClassTestMarks(ctId);
+        
+        if (marks.length === 0) {
+            console.log('ℹ️ No marks to notify about');
+            return;
+        }
+        
+        // Prepare student data for notifications
+        const studentsWithMarks = marks.map(mark => ({
+            email: mark.studentEmail,
+            marksObtained: mark.status === 'present' ? mark.marksObtained : undefined,
+        }));
+        
+        // Send batch notifications
+        const result = await notifyStudentsCTPublished(
+            studentsWithMarks,
+            course.name,
+            ct.name,
+            ct.totalMarks
+        );
+        
+        console.log(`✅ CT published notifications: ${result.sent} sent, ${result.failed} failed`);
+    } catch (error) {
+        console.error('❌ Error sending CT published notifications:', error);
     }
 };
 

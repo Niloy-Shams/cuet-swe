@@ -21,11 +21,15 @@ export interface Student extends BaseUser {
     department: string;
     studentId: number;
     section?: string; // Section identifier (e.g., 'A', 'B', 'C')
+    pushToken?: string; // Expo push notification token
+    pushTokenUpdatedAt?: string; // ISO date string
 }
 
 export interface Teacher extends BaseUser {
     role: 'teacher';
     department: string;
+    pushToken?: string; // Expo push notification token
+    pushTokenUpdatedAt?: string; // ISO date string
 }
 
 export type AppUser = Student | Teacher;

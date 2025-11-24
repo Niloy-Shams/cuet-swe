@@ -1,8 +1,8 @@
 import { db } from '@/config/firebase.config';
 import { AppUser } from '@/types';
-import { getRole, extractStudentIdFromEmail } from '@/utils/role';
+import { extractStudentIdFromEmail, getRole } from '@/utils/role';
 import { User } from 'firebase/auth';
-import { Timestamp, doc, getDoc, setDoc } from 'firebase/firestore';
+import { Timestamp, doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
 
 // Persist user profile using email as the document ID.
 // Email is the sole unique identifier across the app.
@@ -110,5 +110,44 @@ export const getUserFromFirestore = async (email: string): Promise<AppUser | nul
     } catch (error) {
         console.error('❌ Error fetching user from Firestore:', error);
         return null;
+    }
+};
+
+/**
+ * Update user's push notification token
+ * 
+ * @param email - User's email address
+ * @param pushToken - Expo push token
+ * @returns boolean indicating success
+ */
+export const updateUserPushToken = async (
+    email: string,
+    pushToken: string
+): Promise<boolean> => {
+    try {
+        if (!email || !pushToken) {
+            console.log('❌ Email or push token missing');
+            return false;
+        }
+
+        const role = getRole(email);
+        if (!role) {
+            console.log('❌ Invalid role for user:', email);
+            return false;
+        }
+
+        const collectionName = role === 'teacher' ? 'teachers' : 'students';
+        const userRef = doc(db, collectionName, email);
+
+        await updateDoc(userRef, {
+            pushToken,
+            pushTokenUpdatedAt: Timestamp.now(),
+        });
+
+        console.log(`✅ Push token updated for ${role}:`, email);
+        return true;
+    } catch (error) {
+        console.error('❌ Error updating push token:', error);
+        return false;
     }
 };

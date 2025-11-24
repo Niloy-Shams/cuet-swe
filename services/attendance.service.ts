@@ -71,6 +71,14 @@ export const takeAttendance = async (
         await setDoc(doc(db, 'attendanceSessions', sessionId), attendanceSession);
 
         console.log(`✅ Attendance recorded for ${normalizedDate.toDateString()} (Section ${section})`);
+        
+        // Send notifications to absent students
+        await notifyAbsentStudentsAfterAttendance(
+            courseId,
+            studentStatuses,
+            normalizedDate
+        );
+        
         return true;
     } catch (error) {
         console.error('❌ Error recording attendance:', error);
@@ -298,5 +306,55 @@ export const getCourseAttendanceStats = async (
     } catch (error) {
         console.error('❌ Error calculating course attendance stats:', error);
         return null;
+    }
+};
+
+// ========================================================================
+// 4. NOTIFICATIONS
+// ========================================================================
+
+/**
+ * Notify absent students after attendance is taken
+ * @param courseId - The course ID
+ * @param studentStatuses - Map of student email/ID to attendance status
+ * @param date - The date of attendance
+ */
+const notifyAbsentStudentsAfterAttendance = async (
+    courseId: string,
+    studentStatuses: Record<string, AttendanceStatus>,
+    date: Date
+): Promise<void> => {
+    try {
+        // Import dynamically to avoid circular dependencies
+        const { getCourseById } = await import('./course.service');
+        const { notifyAbsentStudents } = await import('./notification.service');
+        
+        // Get course details
+        const course = await getCourseById(courseId);
+        if (!course) {
+            console.error('❌ Course not found for notifications');
+            return;
+        }
+        
+        // Filter absent students
+        const absentStudentIdentifiers = Object.entries(studentStatuses)
+            .filter(([_, status]) => status === 'absent')
+            .map(([identifier, _]) => identifier);
+        
+        if (absentStudentIdentifiers.length === 0) {
+            console.log('ℹ️ No absent students to notify');
+            return;
+        }
+        
+        // Send batch notifications
+        const result = await notifyAbsentStudents(
+            absentStudentIdentifiers,
+            course.name,
+            date
+        );
+        
+        console.log(`✅ Absence notifications: ${result.sent} sent, ${result.failed} failed`);
+    } catch (error) {
+        console.error('❌ Error sending absence notifications:', error);
     }
 };
