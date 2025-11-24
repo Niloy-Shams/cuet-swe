@@ -8,14 +8,24 @@ import { getApp, getApps, initializeApp } from 'firebase/app';
 import { getFirestore } from "firebase/firestore";
 import reactNativeAsyncStorage from '../utils/reactNativeAsyncStorage';
 
+// const firebaseConfig = {
+//   apiKey: "AIzaSyDgFHaimBbFOUARFenMy_B2I-PAPPwfbRw",
+//   authDomain: "attendence-ct.firebaseapp.com",
+//   projectId: "attendence-ct",
+//   storageBucket: "attendence-ct.firebasestorage.app",
+//   messagingSenderId: "29326093701",
+//   appId: "1:29326093701:web:6371df391cbb915f5b68ec",
+//   measurementId: "G-1TJS8FTX96"
+// };
+
 const firebaseConfig = {
-  apiKey: "AIzaSyDgFHaimBbFOUARFenMy_B2I-PAPPwfbRw",
-  authDomain: "attendence-ct.firebaseapp.com",
-  projectId: "attendence-ct",
-  storageBucket: "attendence-ct.firebasestorage.app",
-  messagingSenderId: "29326093701",
-  appId: "1:29326093701:web:6371df391cbb915f5b68ec",
-  measurementId: "G-1TJS8FTX96"
+  apiKey: "AIzaSyCMOoqTkKoL1lXHxKxJcf8SfODIwtDQQTI",
+  authDomain: "cuet-swe.firebaseapp.com",
+  projectId: "cuet-swe",
+  storageBucket: "cuet-swe.firebasestorage.app",
+  messagingSenderId: "69060700428",
+  appId: "1:69060700428:web:56a665a0b27bb1d75e0129",
+  measurementId: "G-8S18PPC4K2"
 };
 
 // Avoid re-initializing if already initialized
