@@ -62,6 +62,7 @@ export default function TeacherCourseDetailScreen() {
     const [showMenuModal, setShowMenuModal] = useState(false);
     const [showDeleteCourseConfirm, setShowDeleteCourseConfirm] = useState(false);
     const [showStudentProgressModal, setShowStudentProgressModal] = useState(false);
+    const [showSendMessageModal, setShowSendMessageModal] = useState(false);
     const [showAlert, setShowAlert] = useState(false);
     const [alertConfig, setAlertConfig] = useState<{ type: 'success' | 'error' | 'warning' | 'info'; title: string; message: string }>({
         type: 'success',
@@ -90,6 +91,10 @@ export default function TeacherCourseDetailScreen() {
     const [editCourseName, setEditCourseName] = useState('');
     const [editBestCTCount, setEditBestCTCount] = useState('');
     const [editCourseCredit, setEditCourseCredit] = useState('');
+
+    // Send message state
+    const [messageTitle, setMessageTitle] = useState('');
+    const [messageContent, setMessageContent] = useState('');
 
     // Invite members state
     const [inviteType, setInviteType] = useState<'teacher' | 'student'>('student');
@@ -603,6 +608,50 @@ export default function TeacherCourseDetailScreen() {
         return 0;
     };
 
+    const handleSendMessage = async () => {
+        if (!course || !user?.email || !user?.name) {
+            showAlertMessage('error', 'Error', 'Missing user information');
+            return;
+        }
+
+        if (!messageTitle.trim()) {
+            showAlertMessage('error', 'Error', 'Please enter a message title');
+            return;
+        }
+
+        if (!messageContent.trim()) {
+            showAlertMessage('error', 'Error', 'Please enter a message');
+            return;
+        }
+
+        try {
+            setLoading(true);
+            const { sendCourseMessage } = await import('@/services/message.service');
+
+            const result = await sendCourseMessage(
+                course.id,
+                messageTitle.trim(),
+                messageContent.trim(),
+                user.email,
+                user.name
+            );
+
+            if (result) {
+                showAlertMessage('success', 'Success', 'Message sent to all students!');
+                setShowSendMessageModal(false);
+                setMessageTitle('');
+                setMessageContent('');
+            } else {
+                showAlertMessage('error', 'Error', 'Failed to send message. Please try again.');
+            }
+        } catch (error) {
+            console.error('Error sending message:', error);
+            showAlertMessage('error', 'Error', 'Failed to send message');
+        } finally {
+            setLoading(false);
+        }
+    };
+
     return (
         <Container useSafeArea={false} style={styles.container}>
             <ScreenHeader
@@ -664,6 +713,7 @@ export default function TeacherCourseDetailScreen() {
                         setShowAttendanceModal(true);
                     }}
                     onExportReport={() => handleExportCourseReport()}
+                    onSendMessage={() => setShowSendMessageModal(true)}
                     refreshing={refreshing}
                     onRefresh={loadCourseData}
                 />
@@ -1037,6 +1087,14 @@ export default function TeacherCourseDetailScreen() {
                 colors={colors}
                 options={[
                     {
+                        label: 'Send Message to Students',
+                        icon: 'send-outline',
+                        onPress: () => {
+                            setShowMenuModal(false);
+                            setShowSendMessageModal(true);
+                        },
+                    },
+                    {
                         label: 'Edit Course',
                         icon: 'create-outline',
                         onPress: handleEditCourse,
@@ -1322,6 +1380,66 @@ export default function TeacherCourseDetailScreen() {
                         </TouchableOpacity>
                     ))}
                 </View>
+            </Modal>
+
+            {/* Send Message Modal */}
+            <Modal
+                visible={showSendMessageModal}
+                onClose={() => {
+                    setShowSendMessageModal(false);
+                    setMessageTitle('');
+                    setMessageContent('');
+                }}
+                title="Send Message to Students"
+                subtitle={`All students in ${course?.name || 'this course'} will receive a notification`}
+                colors={colors}
+                scrollable={false}
+            >
+                <ScrollView showsVerticalScrollIndicator={false}>
+                    <View style={styles.inputGroup}>
+                        <Text style={styles.inputLabel}>Message Title <Text style={{ color: colors.destructive }}>*</Text></Text>
+                        <TextInput
+                            style={styles.textInput}
+                            value={messageTitle}
+                            onChangeText={setMessageTitle}
+                            placeholder="e.g., Important Announcement"
+                            placeholderTextColor={colors.mutedForeground}
+                        />
+                    </View>
+
+                    <View style={styles.inputGroup}>
+                        <Text style={styles.inputLabel}>Message <Text style={{ color: colors.destructive }}>*</Text></Text>
+                        <TextInput
+                            style={[styles.textInput, styles.textArea, { minHeight: 150 }]}
+                            value={messageContent}
+                            onChangeText={setMessageContent}
+                            placeholder="Enter your message here..."
+                            placeholderTextColor={colors.mutedForeground}
+                            multiline
+                            numberOfLines={6}
+                            textAlignVertical="top"
+                        />
+                    </View>
+
+                    <View style={[styles.infoCard, { borderWidth: 1, backgroundColor: colors.primary + '10' }]}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                            <Ionicons name="information-circle" size={20} color={colors.primary} />
+                            <Text style={[styles.infoLabel, { color: colors.foreground }]}>
+                                {students.length} student{students.length !== 1 ? 's' : ''} will be notified
+                            </Text>
+                        </View>
+                    </View>
+
+                    <Button 
+                        onPress={handleSendMessage} 
+                        loading={loading} 
+                        disabled={loading || !messageTitle.trim() || !messageContent.trim()}
+                        style={{ marginTop: 8 }}
+                    >
+                        <Ionicons name="send" size={20} color={colors.primaryForeground} />
+                        <Text style={{ color: colors.primaryForeground, marginLeft: 8 }}>Send Message</Text>
+                    </Button>
+                </ScrollView>
             </Modal>
 
             <ConfirmDialog

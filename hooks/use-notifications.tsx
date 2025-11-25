@@ -91,6 +91,14 @@ export const useNotifications = () => {
             });
             // TODO: Navigate to attendance screen
             // navigation.navigate('CourseDetails', { courseId: data.courseId, tab: 'Attendance' });
+        } else if (data.type === 'course_message') {
+            console.log('💬 Course message received:', {
+                courseName: data.courseName,
+                courseId: data.courseId,
+                messageId: data.messageId,
+            });
+            // TODO: Navigate to course details or messages screen
+            // navigation.navigate('CourseDetails', { courseId: data.courseId });
         }
     };
 

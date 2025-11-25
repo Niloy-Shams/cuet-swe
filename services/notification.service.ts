@@ -169,14 +169,21 @@ export const getUsersPushTokens = async (
 ): Promise<string[]> => {
     try {
         const tokens: string[] = [];
+        let tokensFound = 0;
+        let tokensMissing = 0;
 
         for (const email of userEmails) {
             const token = await getUserPushToken(email);
             if (token) {
                 tokens.push(token);
+                tokensFound++;
+            } else {
+                tokensMissing++;
+                console.warn(`⚠️ No push token found for: ${email}`);
             }
         }
 
+        console.log(`📊 Push token stats: ${tokensFound} found, ${tokensMissing} missing out of ${userEmails.length} users`);
         return tokens;
     } catch (error) {
         console.error('❌ Error getting push tokens:', error);
@@ -247,13 +254,15 @@ export const sendBatchPushNotifications = async (
     data?: Record<string, any>
 ): Promise<{ sent: number; failed: number }> => {
     try {
+        console.log(`🔔 sendBatchPushNotifications called for ${userEmails.length} users`);
         const tokens = await getUsersPushTokens(userEmails);
 
         if (tokens.length === 0) {
-            console.warn('⚠️ No valid push tokens found');
+            console.warn('⚠️ No valid push tokens found - students may not have registered for notifications');
             return { sent: 0, failed: userEmails.length };
         }
 
+        console.log(`📤 Sending ${tokens.length} push notifications to Expo server...`);
         const messages = tokens.map((token) => ({
             to: token,
             sound: 'default',
@@ -273,6 +282,7 @@ export const sendBatchPushNotifications = async (
         });
 
         const result = await response.json();
+        console.log('📨 Expo push response:', JSON.stringify(result, null, 2));
 
         // Count successes and failures
         let sent = 0;
@@ -284,8 +294,14 @@ export const sendBatchPushNotifications = async (
                     sent++;
                 } else {
                     failed++;
+                    console.error('❌ Notification failed:', item);
                 }
             });
+        } else if (result.data && result.data.status === 'ok') {
+            sent = 1;
+        } else if (result.data && result.data.status === 'error') {
+            failed = 1;
+            console.error('❌ Notification failed:', result.data);
         }
 
         console.log(`✅ Notifications sent: ${sent} successful, ${failed} failed`);
@@ -396,6 +412,28 @@ export const notifyAbsentStudents = async (
         type: 'attendance_absent',
         courseName,
         date: date.toISOString(),
+    });
+};
+
+/**
+ * Notify students about a new course message
+ */
+export const notifyCourseMessage = async (
+    studentEmails: string[],
+    courseName: string,
+    messageTitle: string,
+    messageBody: string,
+    courseId: string,
+    messageId: string
+): Promise<{ sent: number; failed: number }> => {
+    const title = `${courseName} - ${messageTitle}`;
+    const body = messageBody;
+
+    return await sendBatchPushNotifications(studentEmails, title, body, {
+        type: 'course_message',
+        courseName,
+        courseId,
+        messageId,
     });
 };
 
