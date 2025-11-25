@@ -33,6 +33,10 @@ yarn-error.*
 # local env files
 .env*.local
 
+# Firebase credentials (NEVER COMMIT THESE!)
+credentials.json
+**/credentials.json
+
 # typescript
 *.tsbuildinfo
 
