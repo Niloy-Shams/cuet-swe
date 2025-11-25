@@ -327,7 +327,6 @@ const notifyAbsentStudentsAfterAttendance = async (
     try {
         // Import dynamically to avoid circular dependencies
         const { getCourseById } = await import('./course.service');
-        const { notifyAbsentStudents } = await import('./notification.service');
         
         // Get course details
         const course = await getCourseById(courseId);
@@ -336,21 +335,61 @@ const notifyAbsentStudentsAfterAttendance = async (
             return;
         }
         
-        // Filter absent students
-        const absentStudentIdentifiers = Object.entries(studentStatuses)
+        // Filter absent student IDs
+        const absentStudentIds = Object.entries(studentStatuses)
             .filter(([_, status]) => status === 'absent')
-            .map(([identifier, _]) => identifier);
+            .map(([identifier, _]) => parseInt(identifier));
         
-        if (absentStudentIdentifiers.length === 0) {
+        if (absentStudentIds.length === 0) {
             console.log('ℹ️ No absent students to notify');
             return;
         }
         
+        // Get all enrolled students to convert IDs to emails
+        const { getEnrolledStudents } = await import('./course.service');
+        const { sendBatchPushNotifications } = await import('./notification.service');
+        
+        const enrolledStudents = await getEnrolledStudents(courseId);
+        
+        // Create mapping from student ID to real email
+        const idToEmailMap = new Map<number, string>();
+        enrolledStudents.forEach(student => {
+            idToEmailMap.set(student.studentId, student.email);
+        });
+        
+        // Convert student IDs to real emails
+        const absentStudentEmails = absentStudentIds
+            .map(studentId => {
+                const realEmail = idToEmailMap.get(studentId);
+                if (!realEmail) {
+                    console.warn(`⚠️ No email found for student ID ${studentId}`);
+                    return null;
+                }
+                return realEmail;
+            })
+            .filter((email): email is string => email !== null && !email.includes('@temp.com'));
+        
+        if (absentStudentEmails.length === 0) {
+            console.log('⚠️ No valid student emails found for absent students');
+            return;
+        }
+        
+        console.log(`📧 Sending absence notifications to ${absentStudentEmails.length} students`);
+        
         // Send batch notifications
-        const result = await notifyAbsentStudents(
-            absentStudentIdentifiers,
-            course.name,
-            date
+        const title = `Attendance Alert - ${course.name}`;
+        const body = `You were marked absent on ${date.toLocaleDateString()}.`;
+        
+        const result = await sendBatchPushNotifications(
+            absentStudentEmails,
+            title,
+            body,
+            {
+                type: 'attendance_absent',
+                courseName: course.name,
+                courseId: courseId,
+                date: date.toISOString(),
+            }
         );
         
         console.log(`✅ Absence notifications: ${result.sent} sent, ${result.failed} failed`);

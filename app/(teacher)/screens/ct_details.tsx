@@ -6,8 +6,8 @@ import { Modal } from '@/components/ui/modal';
 import { ScreenHeader } from '@/components/ui/screen-header';
 import { Text } from '@/components/ui/text';
 import { ColorScheme, useTheme } from '@/hooks/use-theme';
-import { getStudentEnrollments } from '@/services/course.service';
-import { batchUpdateMarks, getClassTestById, getClassTestMarks, updateClassTest } from '@/services/ct.service';
+import { getEnrolledStudents, getStudentEnrollments } from '@/services/course.service';
+import { batchUpdateMarks, getClassTestById, getClassTestMarks, publishClassTest, updateClassTest } from '@/services/ct.service';
 import { ClassTest } from '@/types';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -27,6 +27,7 @@ export default function CTDetailsScreen() {
 
     const [ct, setCT] = useState<ClassTest | null>(null);
     const [students, setStudents] = useState<RollStudent[]>([]);
+    const [studentIdToEmail, setStudentIdToEmail] = useState<Record<number, string>>({});
     const [marksInput, setMarksInput] = useState<Record<string, { status: 'present' | 'absent'; marks?: number }>>({});
     const [editMode, setEditMode] = useState(false);
     const [showOptionsMenu, setShowOptionsMenu] = useState(false);
@@ -67,18 +68,31 @@ export default function CTDetailsScreen() {
             }
             setCT(ctData);
 
-            // Load student enrollments for this course
+            // Load enrolled students to get real email addresses
+            const enrolledStudents = await getEnrolledStudents(courseId);
+            
+            // Create mapping from student ID to email
+            const idToEmailMap: Record<number, string> = {};
+            enrolledStudents.forEach(student => {
+                idToEmailMap[student.studentId] = student.email;
+            });
+            setStudentIdToEmail(idToEmailMap);
+
+            // Load student enrollments for section information
             const enrollments = await getStudentEnrollments(courseId);
 
             // Generate student array from enrollments
             const allStudents: RollStudent[] = [];
             enrollments.forEach(enrollment => {
                 for (let id = enrollment.startId; id <= enrollment.endId; id++) {
-                    allStudents.push({
-                        studentId: id,
-                        roll: parseInt(String(id).slice(-3)),
-                        section: enrollment.section,
-                    });
+                    // Only include students who actually exist in the database
+                    if (idToEmailMap[id]) {
+                        allStudents.push({
+                            studentId: id,
+                            roll: parseInt(String(id).slice(-3)),
+                            section: enrollment.section,
+                        });
+                    }
                 }
             });
 
@@ -177,13 +191,18 @@ export default function CTDetailsScreen() {
 
         try {
             setLoading(true);
-            // Prepare marks data for batch update
-            // Note: For now we'll use studentId as email placeholder since we don't have actual student emails
+            // Prepare marks data for batch update using real student emails
             const marksData = students.map(student => {
                 const studentIdStr = String(student.studentId);
                 const studentData = marksInput[studentIdStr];
+                const realEmail = studentIdToEmail[student.studentId];
+                
+                if (!realEmail) {
+                    console.warn(`⚠️ No email found for student ID ${student.studentId}`);
+                }
+                
                 return {
-                    studentEmail: `student_${student.studentId}@temp.com`, // Temporary - should be real email
+                    studentEmail: realEmail || `student_${student.studentId}@temp.com`, // Fallback to temp if no real email
                     studentId: student.studentId,
                     status: studentData?.status || 'present',
                     marksObtained: studentData?.status === 'present' ? studentData?.marks : undefined
@@ -218,7 +237,15 @@ export default function CTDetailsScreen() {
 
         try {
             const newPublishState = !ct.isPublished;
-            const success = await updateClassTest(ct.id, { isPublished: newPublishState });
+            let success = false;
+            
+            if (newPublishState) {
+                // Publishing - use publishClassTest to send notifications
+                success = await publishClassTest(ct.id);
+            } else {
+                // Hiding - just update without notifications
+                success = await updateClassTest(ct.id, { isPublished: false });
+            }
 
             if (success) {
                 setCT({ ...ct, isPublished: newPublishState });
