@@ -162,11 +162,15 @@ export const publishClassTest = async (
     ctId: string
 ): Promise<boolean> => {
     try {
+        console.log(`📢 Publishing CT: ${ctId}`);
         const success = await updateClassTest(ctId, { isPublished: true });
         
         if (success) {
+            console.log(`✅ CT published successfully, sending notifications...`);
             // Send notifications to students about published results
             await notifyStudentsAboutPublishedCT(ctId);
+        } else {
+            console.error('❌ Failed to update CT publish status');
         }
         
         return success;
@@ -398,7 +402,8 @@ export const batchUpdateMarks = async (
             const markRef = doc(db, 'classTests', ctId, 'marks', mark.studentEmail);
             const markSnap = await getDoc(markRef);
 
-            const markData: Omit<Mark, 'feedback'> & { feedback?: string } = {
+            // Build mark data with only defined fields (Firestore doesn't allow undefined)
+            const markData: any = {
                 id: mark.studentEmail,
                 courseId,
                 ctId,
@@ -411,11 +416,14 @@ export const batchUpdateMarks = async (
                 updatedAt: Timestamp.now(),
             };
 
-            if (mark.feedback) {
-                markData.feedback = mark.feedback;
-            }
+            // Only add marksObtained if student is present and has marks
             if (mark.status === 'present' && mark.marksObtained !== undefined) {
                 markData.marksObtained = mark.marksObtained;
+            }
+
+            // Only add feedback if provided
+            if (mark.feedback !== undefined && mark.feedback !== null && mark.feedback !== '') {
+                markData.feedback = mark.feedback;
             }
 
             batch.set(markRef, markData);
