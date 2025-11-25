@@ -186,7 +186,7 @@ const notifyStudentsAboutPublishedCT = async (
     try {
         // Import dynamically to avoid circular dependencies
         const { getCourseById } = await import('./course.service');
-        const { notifyStudentsCTPublished } = await import('./notification.service');
+        const { sendBatchPushNotifications } = await import('./notification.service');
         
         // Get CT details
         const ct = await getClassTestById(ctId);
@@ -210,18 +210,64 @@ const notifyStudentsAboutPublishedCT = async (
             return;
         }
         
-        // Prepare student data for notifications
-        const studentsWithMarks = marks.map(mark => ({
-            email: mark.studentEmail,
-            marksObtained: mark.status === 'present' ? mark.marksObtained : undefined,
-        }));
+        console.log(`📧 Sending CT result notifications to ${marks.length} students`);
+        
+        // Get enrolled students to convert temp emails to real emails if needed
+        const { getEnrolledStudents } = await import('./course.service');
+        const enrolledStudents = await getEnrolledStudents(ct.courseId);
+        
+        // Create mapping from student ID to real email
+        const idToEmailMap = new Map<number, string>();
+        enrolledStudents.forEach(student => {
+            idToEmailMap.set(student.studentId, student.email);
+        });
+        
+        // Convert student emails (handle both temp emails and real emails)
+        const studentEmails = marks
+            .map(mark => {
+                // Check if this is a temp email format
+                if (mark.studentEmail.includes('@temp.com')) {
+                    // Extract student ID from temp email (e.g., student_2104101@temp.com -> 2104101)
+                    const match = mark.studentEmail.match(/student_(\d+)@temp\.com/);
+                    if (match) {
+                        const studentId = parseInt(match[1]);
+                        const realEmail = idToEmailMap.get(studentId);
+                        if (realEmail) {
+                            console.log(`🔄 Converting ${mark.studentEmail} -> ${realEmail}`);
+                            return realEmail;
+                        } else {
+                            console.warn(`⚠️ No real email found for student ID ${studentId}`);
+                        }
+                    }
+                }
+                // Return the original email (already real or couldn't convert)
+                return mark.studentEmail;
+            })
+            .filter(email => !email.includes('@temp.com')); // Filter out any remaining temp emails
+        
+        if (studentEmails.length === 0) {
+            console.warn('⚠️ No valid student emails found after conversion');
+            return;
+        }
+        
+        console.log(`📤 Sending to ${studentEmails.length} students with valid emails`);
         
         // Send batch notifications
-        const result = await notifyStudentsCTPublished(
-            studentsWithMarks,
-            course.name,
-            ct.name,
-            ct.totalMarks
+        const title = `CT Result Published - ${course.name}`;
+        const body = `Your result for "${ct.name}" has been published. Check the app to view your marks.`;
+        
+        const result = await sendBatchPushNotifications(
+            studentEmails,
+            title,
+            body,
+            {
+                type: 'ct_published',
+                courseName: course.name,
+                courseId: ct.courseId,
+                ctId: ct.id,
+                ctName: ct.name,
+                totalMarks: ct.totalMarks,
+            }
         );
         
         console.log(`✅ CT published notifications: ${result.sent} sent, ${result.failed} failed`);
