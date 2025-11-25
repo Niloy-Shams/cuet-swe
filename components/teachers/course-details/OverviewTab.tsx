@@ -18,6 +18,7 @@ interface OverviewTabProps {
     onInviteMembers: () => void;
     onViewAttendance: (session: AttendanceSession) => void;
     onExportReport?: () => void;
+    onSendMessage?: () => void;
     refreshing?: boolean;
     onRefresh?: () => void;
 }
@@ -34,6 +35,7 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({
     onInviteMembers,
     onViewAttendance,
     onExportReport,
+    onSendMessage,
     refreshing = false,
     onRefresh,
 }) => {
@@ -141,6 +143,18 @@ export const OverviewTab: React.FC<OverviewTabProps> = ({
                             Invite Members
                         </Text>
                     </TouchableOpacity>
+
+                    {onSendMessage && (
+                        <TouchableOpacity
+                            style={[styles.actionCard, { backgroundColor: '#8b5cf6' }]}
+                            onPress={onSendMessage}
+                        >
+                            <Ionicons name="send" size={28} color="#FFFFFF" />
+                            <Text style={[styles.actionText, { color: '#FFFFFF' }]}>
+                                Send Message
+                            </Text>
+                        </TouchableOpacity>
+                    )}
 
                     {onExportReport && (
                         <TouchableOpacity

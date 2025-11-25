@@ -215,3 +215,22 @@ export interface Mark {
 export interface InviteTeacherFormData {
     teacherEmail: string;
 }
+
+// ========================================================================
+// 8. COURSE MESSAGE TYPES
+// ========================================================================
+
+/**
+ * Course message sent by teacher to all enrolled students
+ * Stored in collection: courseMessages
+ */
+export interface CourseMessage {
+    id: string;
+    courseId: string;
+    courseName: string; // Denormalized for easy display
+    title: string;
+    message: string;
+    senderEmail: string; // Teacher who sent the message
+    senderName: string; // Denormalized for easy display
+    createdAt: Timestamp;
+}
