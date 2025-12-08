@@ -3,6 +3,8 @@ import { Ionicons } from '@expo/vector-icons';
 import React from 'react';
 import {
     DimensionValue,
+    KeyboardAvoidingView,
+    Platform,
     Modal as RNModal,
     ScrollView,
     StyleSheet,
@@ -64,84 +66,94 @@ export const Modal: React.FC<ModalProps> = ({
             transparent={true}
             onRequestClose={onClose}
         >
-            <TouchableOpacity
-                style={styles.modalOverlay}
-                activeOpacity={1}
-                onPress={onClose}
+            <KeyboardAvoidingView
+                style={{ flex: 1 }}
+                behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
             >
                 <TouchableOpacity
-                    style={[styles.modalContent, contentStyle]}
+                    style={styles.modalOverlay}
                     activeOpacity={1}
-                    onPress={(e) => e.stopPropagation()}
+                    onPress={onClose}
                 >
-                    <View style={styles.modalHeader}>
-                        <View style={styles.headerText}>
-                            <Text style={styles.modalTitle}>{title}</Text>
-                            {subtitle && (
-                                <Text style={styles.modalSubtitle}>{subtitle}</Text>
-                            )}
-                            {message && (
-                                <Text style={styles.modalMessage}>{message}</Text>
-                            )}
+                    <TouchableOpacity
+                        style={[styles.modalContent, contentStyle]}
+                        activeOpacity={1}
+                        onPress={(e) => e.stopPropagation()}
+                    >
+                        <View style={styles.modalHeader}>
+                            <View style={styles.headerText}>
+                                <Text style={styles.modalTitle}>{title}</Text>
+                                {subtitle && (
+                                    <Text style={styles.modalSubtitle}>{subtitle}</Text>
+                                )}
+                                {message && (
+                                    <Text style={styles.modalMessage}>{message}</Text>
+                                )}
+                            </View>
+                            <TouchableOpacity onPress={onClose} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                                <Ionicons name="close" size={24} color={colors.foreground} />
+                            </TouchableOpacity>
                         </View>
-                        <TouchableOpacity onPress={onClose} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-                            <Ionicons name="close" size={24} color={colors.foreground} />
-                        </TouchableOpacity>
-                    </View>
 
-                    {/* Options mode (ActionSheet style) */}
-                    {options && options.length > 0 ? (
-                        <ScrollView showsVerticalScrollIndicator={false} style={styles.optionsContainer}>
-                            {options.map((option, index) => (
-                                <TouchableOpacity
-                                    key={index}
-                                    style={[
-                                        styles.option,
-                                        index === options.length - 1 && styles.lastOption,
-                                        option.disabled && styles.disabledOption,
-                                    ]}
-                                    onPress={() => handleOptionPress(option)}
-                                    activeOpacity={0.7}
-                                    disabled={option.disabled}
-                                >
-                                    {option.icon && (
-                                        <Ionicons
-                                            name={option.icon}
-                                            size={22}
-                                            color={
-                                                option.disabled
-                                                    ? colors.mutedForeground
-                                                    : option.destructive
-                                                        ? colors.destructive
-                                                        : colors.primary
-                                            }
-                                            style={styles.optionIcon}
-                                        />
-                                    )}
-                                    <Text
+                        {/* Options mode (ActionSheet style) */}
+                        {options && options.length > 0 ? (
+                            <ScrollView showsVerticalScrollIndicator={false} style={styles.optionsContainer}>
+                                {options.map((option, index) => (
+                                    <TouchableOpacity
+                                        key={index}
                                         style={[
-                                            styles.optionText,
-                                            option.destructive && { color: colors.destructive },
-                                            option.disabled && { color: colors.mutedForeground },
+                                            styles.option,
+                                            index === options.length - 1 && styles.lastOption,
+                                            option.disabled && styles.disabledOption,
                                         ]}
+                                        onPress={() => handleOptionPress(option)}
+                                        activeOpacity={0.7}
+                                        disabled={option.disabled}
                                     >
-                                        {option.label}
-                                    </Text>
-                                </TouchableOpacity>
-                            ))}
-                        </ScrollView>
-                    ) : (
-                        // Custom content mode
-                        scrollable ? (
-                            <ScrollView showsVerticalScrollIndicator={false}>
-                                {children}
+                                        {option.icon && (
+                                            <Ionicons
+                                                name={option.icon}
+                                                size={22}
+                                                color={
+                                                    option.disabled
+                                                        ? colors.mutedForeground
+                                                        : option.destructive
+                                                            ? colors.destructive
+                                                            : colors.primary
+                                                }
+                                                style={styles.optionIcon}
+                                            />
+                                        )}
+                                        <Text
+                                            style={[
+                                                styles.optionText,
+                                                option.destructive && { color: colors.destructive },
+                                                option.disabled && { color: colors.mutedForeground },
+                                            ]}
+                                        >
+                                            {option.label}
+                                        </Text>
+                                    </TouchableOpacity>
+                                ))}
                             </ScrollView>
                         ) : (
-                            children
-                        )
-                    )}
+                            // Custom content mode
+                            scrollable ? (
+                                <ScrollView 
+                                    showsVerticalScrollIndicator={false}
+                                    contentContainerStyle={styles.scrollContent}
+                                    keyboardShouldPersistTaps="handled"
+                                >
+                                    {children}
+                                    <View style={styles.extraSpace} />
+                                </ScrollView>
+                            ) : (
+                                children
+                            )
+                        )}
+                    </TouchableOpacity>
                 </TouchableOpacity>
-            </TouchableOpacity>
+            </KeyboardAvoidingView>
         </RNModal>
     );
 };
@@ -215,5 +227,11 @@ const getStyles = (colors: ColorScheme, maxHeight: DimensionValue) =>
             fontSize: 16,
             color: colors.foreground,
             flex: 1,
+        },
+        scrollContent: {
+            flexGrow: 1,
+        },
+        extraSpace: {
+            height: 300,
         },
     });

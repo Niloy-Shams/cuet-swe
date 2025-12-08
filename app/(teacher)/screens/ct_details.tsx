@@ -12,7 +12,7 @@ import { ClassTest } from '@/types';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, ScrollView, StyleSheet, TextInput, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, TextInput, TouchableOpacity, View } from 'react-native';
 
 interface RollStudent {
     studentId: number;
@@ -331,8 +331,13 @@ export default function CTDetailsScreen() {
                 }}
             />
 
-            {/* Action Buttons */}
-            <View style={styles.actionBar}>
+            <KeyboardAvoidingView
+                style={{ flex: 1 }}
+                behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+                keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
+            >
+                {/* Action Buttons */}
+                <View style={styles.actionBar}>
                 <Button
                     onPress={() => editMode ? handleCancelEdit() : setEditMode(true)}
                     style={styles.actionBtn}
@@ -450,6 +455,7 @@ export default function CTDetailsScreen() {
                     </Button>
                 </View>
             )}
+            </KeyboardAvoidingView>
 
             <Modal
                 visible={showOptionsMenu}
